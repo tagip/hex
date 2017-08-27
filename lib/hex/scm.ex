@@ -157,7 +157,7 @@ defmodule Hex.SCM do
     {"Makefile.win", "make"}
   ]
 
-  def guess_build_tools(%{"build_tools" => tools}) do
+  def guess_build_tools(%{build_tools: tools}) do
     if tools do
       Enum.uniq(tools)
     else
@@ -167,7 +167,8 @@ defmodule Hex.SCM do
 
   def guess_build_tools(meta) do
     base_files =
-      (meta["files"] || [])
+      # TODO: meta files is required, print warning somewhere if not present?
+      (meta[:files] || [])
       |> Enum.filter(&(Path.dirname(&1) == "."))
       |> Enum.into(Hex.Set.new)
 
