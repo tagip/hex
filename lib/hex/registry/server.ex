@@ -257,6 +257,7 @@ defmodule Hex.Registry.Server do
   #   {{:checksum, ^repo, _package, _version}, _} -> true
   #   {{:retired, ^repo, _package, _version}, _} -> true
   #   {{:tarball_etag, ^repo, _package, _version}, _} -> true
+  #   {{:registry_etag, ^repo, _package, _version}, _} -> true
   #   _ -> false
   # end)
 
@@ -266,6 +267,7 @@ defmodule Hex.Registry.Server do
      {{{:checksum, :"$1", :"$2", :"$3"}, :_}, [{:"=:=", {:const, repo}, :"$1"}], [true]},
      {{{:retired, :"$1", :"$2", :"$3"}, :_}, [{:"=:=", {:const, repo}, :"$1"}], [true]},
      {{{:tarball_etag, :"$1", :"$2", :"$3"}, :_}, [{:"=:=", {:const, repo}, :"$1"}], [true]},
+     {{{:registry_etag, :"$1", :"$2", :"$3"}, :_}, [{:"=:=", {:const, repo}, :"$1"}], [true]},
      {:_, [], [false]}]
   end
 
@@ -363,6 +365,7 @@ defmodule Hex.Registry.Server do
   end
 
   defp missing_status?({:ok, {status, _, _}}), do: status in [403, 404]
+  defp missing_status?(_), do: false
 
   defp maybe_wait(package, from, state, fun) do
     cond do

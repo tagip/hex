@@ -86,11 +86,18 @@ defmodule Mix.Tasks.Hex.Publish do
       by setting this field.
   """
 
-  @switches [revert: :string, progress: :boolean, canonical: :string, organization: :string, confirm: :boolean]
+  @switches [
+    revert: :string,
+    progress: :boolean,
+    canonical: :string,
+    organization: :string,
+    organisation: :string,
+    confirm: :boolean,
+  ]
 
   def run(args) do
     Hex.start()
-    {opts, args, _} = OptionParser.parse(args, switches: @switches)
+    {opts, args} = Hex.OptionParser.parse!(args, strict: @switches)
 
     build = Build.prepare_package()
     revert_version = opts[:revert]

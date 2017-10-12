@@ -6,9 +6,10 @@ defmodule Mix.Tasks.Hex.Build do
   @error_fields ~w(app name files description version build_tools)a
   @warn_fields ~w(licenses maintainers links)a
   @meta_fields @error_fields ++ @warn_fields ++ ~w(elixir extra)a
+  @root_fields ~w(app version elixir description)a
   @max_description_length 300
   @default_repo "hexpm"
-
+  @metadata_config "hex_metadata.config"
   @shortdoc "Builds a new package version locally"
 
   @moduledoc """
@@ -84,13 +85,15 @@ defmodule Mix.Tasks.Hex.Build do
   def prepare_package() do
     Mix.Project.get!()
     config = Mix.Project.config()
-    raise_if_umbrella_project!(config)
+    check_umbrella_project!(config)
+    check_root_fields!(config)
 
     package = Enum.into(config[:package] || [], %{})
+    check_misspellings!(package)
     {organization, package} = Map.pop(package, :organization)
     {deps, exclude_deps} = dependencies()
     meta = meta_for(config, package, deps)
-    raise_if_unstable_dependencies!(organization, meta)
+    check_unstable_dependencies!(organization, meta)
 
     %{
       config: config,
@@ -124,6 +127,7 @@ defmodule Mix.Tasks.Hex.Build do
       check_missing_fields(meta) ++
       check_description_length(meta) ++
       check_missing_files(package_files || []) ++
+      check_reserved_files(package_files || []) ++
       check_excluded_deps(exclude_deps)
 
     if errors != [] do
@@ -140,7 +144,7 @@ defmodule Mix.Tasks.Hex.Build do
 
   defp meta_for(config, package, deps) do
     config
-    |> Keyword.take([:app, :version, :elixir, :description])
+    |> Keyword.take(@root_fields)
     |> Enum.into(%{})
     |> Map.merge(package)
     |> package(config)
@@ -196,7 +200,7 @@ defmodule Mix.Tasks.Hex.Build do
     package
     |> Map.put(:files, files)
     |> maybe_put(:description, package[:description], &Hex.string_trim/1)
-    |> maybe_put(:name, package[:name] || config[:app], &(&1))
+    |> maybe_put(:name, package[:name] || config[:app], &to_string(&1))
     |> maybe_put(:build_tools, !package[:build_tools] && guess_build_tools(files), &(&1))
     |> Map.take(@meta_fields)
   end
@@ -209,15 +213,31 @@ defmodule Mix.Tasks.Hex.Build do
     end
   end
 
-  def raise_if_umbrella_project!(config) do
+  def check_umbrella_project!(config) do
     if Mix.Project.umbrella?(config) do
       Mix.raise "Hex does not support umbrella projects"
     end
   end
 
-  defp raise_if_unstable_dependencies!(organization, meta) do
+  defp check_unstable_dependencies!(organization, meta) do
     if organization in [nil, "hexpm"] and not pre_requirement?(meta.version) and has_pre_requirements?(meta) do
-      Mix.raise "A stable package release cannot have a pre-release dependency."
+      Mix.raise "A stable package release cannot have a pre-release dependency"
+    end
+  end
+
+  defp check_misspellings!(opts) do
+    if opts[:organisation] do
+      Mix.raise "Invalid Hex package config :organisation, use spelling :organization"
+    end
+  end
+
+  defp check_root_fields!(config) do
+    package_only_fields = [:organisation, :organization] ++ @meta_fields -- @root_fields
+    config_keys = Keyword.keys(config)
+    invalid_field = Enum.find(config_keys, &(&1 in package_only_fields))
+
+    if invalid_field do
+      Hex.Shell.warn "Mix configuration #{inspect invalid_field} also belongs under the :package key, did you misplace it?"
     end
   end
 
@@ -320,6 +340,17 @@ defmodule Mix.Tasks.Hex.Build do
         []
       missing ->
         ["Missing files: #{Enum.join(missing, ", ")}"]
+    end
+  end
+
+  defp check_reserved_files(package_files) do
+    reserved_file = @metadata_config
+    invalid_file = Enum.find(package_files, &(reserved_file in Path.wildcard(&1)))
+
+    if invalid_file do
+      ["Do not include this file: #{reserved_file}"]
+    else
+      []
     end
   end
 

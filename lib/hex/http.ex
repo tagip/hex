@@ -6,7 +6,7 @@ defmodule Hex.HTTP do
   def request(method, url, headers, body, opts \\ []) do
     headers = build_headers(headers)
     timeout = opts[:timeout] || Hex.State.fetch!(:http_timeout) || @request_timeout
-    http_opts = build_http_opts(url)
+    http_opts = build_http_opts(url, timeout)
     opts = [body_format: :binary]
     request = build_request(url, headers, body)
     profile = Hex.State.fetch!(:httpc_profile)
@@ -27,10 +27,10 @@ defmodule Hex.HTTP do
     Map.merge(default_headers, headers)
   end
 
-  defp build_http_opts(url) do
+  defp build_http_opts(url, timeout) do
     [
       relaxed: true,
-      timeout: @request_timeout,
+      timeout: timeout,
       ssl: Hex.HTTP.SSL.ssl_opts(url),
       autoredirect: false
     ] ++ proxy_config(url)
@@ -49,13 +49,21 @@ defmodule Hex.HTTP do
   end
 
   defp retry(:get, request, times, fun) do
-    case fun.(request) do
-      {:http_error, _, _} when times > 0 ->
+    result =
+      case fun.(request) do
+        {:http_error, _, _} = error ->
+          {:retry, error}
+        {:error, :socket_closed_remotely} = error ->
+          {:retry, error}
+        other ->
+          {:noretry, other}
+      end
+
+    case result do
+      {:retry, _} when times > 0 ->
         retry(:get, request, times - 1, fun)
-      {:http_error, _, _} = error ->
-        error
-      other ->
-        other
+      {_other, result} ->
+        result
     end
   end
   defp retry(_method, request, _times, fun), do: fun.(request)

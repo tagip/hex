@@ -4,10 +4,16 @@ defmodule Hex.Repo do
   @public_keys_html "https://hex.pm/docs/public_keys"
 
   def get_repo(repo) do
+    repo = repo || "hexpm"
     repos = Hex.State.fetch!(:repos)
-    case Map.fetch(repos, repo || "hexpm") do
+    case Map.fetch(repos, repo) do
       {:ok, config} ->
-        config
+        mirror_url = Hex.State.fetch!(:mirror_url)
+        if repo == "hexpm" and mirror_url do
+          Map.put(config, :url, mirror_url)
+        else
+          config
+        end
       :error ->
         Mix.raise "Unknown repository #{inspect repo}, add new repositories " <>
                   "with the `mix hex.repo` or `mix hex.organization` tasks"
@@ -53,17 +59,17 @@ defmodule Hex.Repo do
 
   defp package_url(repo, package) do
     config = get_repo(repo)
-    config.url <> "/packages/#{package}"
+    config.url <> "/packages/#{URI.encode(package)}"
   end
 
   defp docs_url(repo, package, version) do
     config = get_repo(repo)
-    config.url <> "/docs/#{package}-#{version}.tar.gz"
+    config.url <> "/docs/#{URI.encode(package)}-#{URI.encode(version)}.tar.gz"
   end
 
   defp tarball_url(repo, package, version) do
     config = get_repo(repo)
-    config.url <> "/tarballs/#{package}-#{version}.tar"
+    config.url <> "/tarballs/#{URI.encode(package)}-#{URI.encode(version)}.tar"
   end
 
   defp etag_headers(nil), do: %{}
